@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(New-Item *)",
+      "PowerShell(Get-ChildItem -Recurse -File \"C:\\\\Users\\\\hp\\\\Desktop\\\\Games\\\\ziggy\" | ForEach-Object { $_.FullName }22)"
+    ]
+  }
+}

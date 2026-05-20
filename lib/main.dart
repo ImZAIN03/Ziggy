@@ -1,12 +1,15 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flame/game.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'game/ziggy_game.dart';
+import 'services/ad_manager.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+  await AdManager.instance.initialize();
+  await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
   runApp(const ZiggyApp());
 }
@@ -231,9 +234,57 @@ class _MenuOverlayState extends State<MenuOverlay>
 
 // ─── Game-Over screen ─────────────────────────────────────────────────────────
 
-class GameOverOverlay extends StatelessWidget {
+class GameOverOverlay extends StatefulWidget {
   final ZiggyGame game;
   const GameOverOverlay({super.key, required this.game});
+
+  @override
+  State<GameOverOverlay> createState() => _GameOverOverlayState();
+}
+
+class _GameOverOverlayState extends State<GameOverOverlay> {
+  /// True while the rewarded ad is loading/displaying — disables the button.
+  bool _watchingAd = false;
+
+  /// Transient message shown when the ad is unavailable.
+  String? _adMessage;
+  Timer? _messageTimer;
+
+  @override
+  void dispose() {
+    _messageTimer?.cancel();
+    super.dispose();
+  }
+
+  void _showMessage(String msg) {
+    _messageTimer?.cancel();
+    setState(() => _adMessage = msg);
+    _messageTimer = Timer(const Duration(seconds: 3), () {
+      if (mounted) setState(() => _adMessage = null);
+    });
+  }
+
+  void _onWatchAdTap() {
+    if (_watchingAd) return;
+    setState(() => _watchingAd = true);
+
+    AdManager.instance.showRewarded(
+      onRewarded: () {
+        // Reward earned — hand control back to the game engine.
+        // The overlay is removed inside continueAfterAd().
+        widget.game.continueAfterAd();
+      },
+      onDismissedWithoutReward: () {
+        if (mounted) setState(() => _watchingAd = false);
+      },
+      onFailed: () {
+        if (mounted) {
+          setState(() => _watchingAd = false);
+          _showMessage('Ad not available — try again later');
+        }
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -263,8 +314,7 @@ class GameOverOverlay extends StatelessWidget {
 
             // ── Score card ──
             Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 44, vertical: 28),
+              padding: const EdgeInsets.symmetric(horizontal: 44, vertical: 28),
               decoration: BoxDecoration(
                 color: Colors.black.withOpacity(0.55),
                 border: Border.all(
@@ -282,7 +332,6 @@ class GameOverOverlay extends StatelessWidget {
               ),
               child: Column(
                 children: [
-                  // Score label
                   Text(
                     'SCORE',
                     style: GoogleFonts.orbitron(
@@ -293,9 +342,8 @@ class GameOverOverlay extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 6),
-                  // Score value — big & bright yellow
                   Text(
-                    '${game.score}',
+                    '${widget.game.score}',
                     style: GoogleFonts.orbitron(
                       fontSize: 60,
                       fontWeight: FontWeight.w900,
@@ -307,14 +355,12 @@ class GameOverOverlay extends StatelessWidget {
                       ],
                     ),
                   ),
-
                   const SizedBox(height: 18),
                   Divider(
-                      color: const Color(0xFF00FFFF).withOpacity(0.2),
-                      thickness: 1),
+                    color: const Color(0xFF00FFFF).withOpacity(0.2),
+                    thickness: 1,
+                  ),
                   const SizedBox(height: 18),
-
-                  // Best label
                   Text(
                     'BEST',
                     style: GoogleFonts.orbitron(
@@ -325,9 +371,8 @@ class GameOverOverlay extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 6),
-                  // Best value — green, clearly readable
                   Text(
-                    '${game.bestScore}',
+                    '${widget.game.bestScore}',
                     style: GoogleFonts.orbitron(
                       fontSize: 38,
                       fontWeight: FontWeight.bold,
@@ -343,12 +388,72 @@ class GameOverOverlay extends StatelessWidget {
               ),
             ),
 
-            const SizedBox(height: 56),
+            const SizedBox(height: 44),
 
+            // ── Watch Ad to Continue (only offered once per run) ──
+            if (widget.game.canContinue) ...[
+              _watchingAd
+                  ? Column(
+                      children: [
+                        const SizedBox(
+                          width: 28,
+                          height: 28,
+                          child: CircularProgressIndicator(
+                            color: Color(0xFF00FFFF),
+                            strokeWidth: 2.5,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        Text(
+                          'LOADING AD...',
+                          style: GoogleFonts.orbitron(
+                            fontSize: 11,
+                            color: const Color(0xFF00FFFF),
+                            letterSpacing: 3,
+                          ),
+                        ),
+                      ],
+                    )
+                  : Column(
+                      children: [
+                        _NeonButton(
+                          label: '▶  WATCH AD',
+                          glowColor: const Color(0xFF00FFFF),
+                          onTap: _onWatchAdTap,
+                        ),
+                        const SizedBox(height: 10),
+                        Text(
+                          'CONTINUE WITH YOUR SCORE',
+                          style: GoogleFonts.orbitron(
+                            fontSize: 9,
+                            color: const Color(0xFF3D6080),
+                            letterSpacing: 2.5,
+                          ),
+                        ),
+                      ],
+                    ),
+
+              // Transient "ad not available" message
+              if (_adMessage != null) ...[
+                const SizedBox(height: 10),
+                Text(
+                  _adMessage!,
+                  style: GoogleFonts.orbitron(
+                    fontSize: 10,
+                    color: const Color(0xFFFF0066),
+                    letterSpacing: 1.5,
+                  ),
+                ),
+              ],
+
+              const SizedBox(height: 24),
+            ],
+
+            // ── Play Again ──
             _NeonButton(
               label: 'PLAY AGAIN',
               glowColor: const Color(0xFFFF0066),
-              onTap: game.restartGame,
+              onTap: widget.game.restartGame,
             ),
           ],
         ),

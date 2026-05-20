@@ -8,6 +8,7 @@ import 'components/wall_pair.dart';
 import 'components/particle_system.dart';
 import 'components/score_display.dart';
 import 'components/background.dart';
+import '../services/ad_manager.dart';
 
 class ZiggyGame extends FlameGame with TapCallbacks, HasCollisionDetection {
   static const double gameWidth = 400;
@@ -23,6 +24,12 @@ class ZiggyGame extends FlameGame with TapCallbacks, HasCollisionDetection {
   bool isPlaying = false;
   int score = 0;
   int bestScore = 0;
+
+  /// True once the player has used their one "continue" for this run.
+  bool _hasUsedContinue = false;
+
+  /// Whether a "Watch Ad to Continue" offer is still available this run.
+  bool get canContinue => !_hasUsedContinue;
 
   double _wallTimer = 0;
   double _wallInterval = 2.2;
@@ -90,11 +97,29 @@ class ZiggyGame extends FlameGame with TapCallbacks, HasCollisionDetection {
     _elapsedTime = 0;
     _shakeTimer = 0;
     _shakeMaxTimer = 0;
+    _hasUsedContinue = false;
 
     world.children.whereType<WallPair>().toList().forEach((w) => w.removeFromParent());
 
     ball.reset(Vector2(gameWidth / 2, gameHeight * 0.75));
     scoreDisplay.updateScore(0);
+  }
+
+  /// Revives the player after watching a rewarded ad.
+  /// Score and difficulty are preserved; only the ball and walls reset.
+  void continueAfterAd() {
+    _hasUsedContinue = true;
+    _shakeTimer = 0;
+    _shakeMaxTimer = 0;
+    camera.viewfinder.position = Vector2.zero();
+
+    overlays.remove('gameOver');
+
+    // Clear all on-screen walls so the player has a fair restart.
+    world.children.whereType<WallPair>().toList().forEach((w) => w.removeFromParent());
+
+    ball.reset(Vector2(gameWidth / 2, gameHeight * 0.75));
+    isPlaying = true;
   }
 
   void onBallPassedWall() {
@@ -114,8 +139,12 @@ class ZiggyGame extends FlameGame with TapCallbacks, HasCollisionDetection {
     particles.burst(ball.position, neonPink, 40);
     particles.burst(ball.position, neonYellow, 20);
 
+    // Wait for the death animation, then let AdManager decide whether to
+    // show an interstitial before revealing the game-over screen.
     Future.delayed(const Duration(milliseconds: 700), () {
-      overlays.add('gameOver');
+      AdManager.instance.onGameOver(
+        onComplete: () => overlays.add('gameOver'),
+      );
     });
   }
 

@@ -25,6 +25,10 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+        <!-- AdMob App ID -->
+        <meta-data
+            android:name="com.google.android.gms.ads.APPLICATION_ID"
+            android:value="ca-app-pub-9788310162130092~5178956477"/>
     </application>
     <uses-permission android:name="android.permission.INTERNET"/>
 </manifest>

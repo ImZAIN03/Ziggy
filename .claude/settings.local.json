@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "PowerShell(New-Item *)",
-      "PowerShell(Get-ChildItem -Recurse -File \"C:\\\\Users\\\\hp\\\\Desktop\\\\Games\\\\ziggy\" | ForEach-Object { $_.FullName }22)"
+      "PowerShell(Get-ChildItem -Recurse -File \"C:\\\\Users\\\\hp\\\\Desktop\\\\Games\\\\ziggy\" | ForEach-Object { $_.FullName }22)",
+      "Bash(Test-Path *)"
     ]
   }
 }
